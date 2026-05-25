@@ -31,6 +31,7 @@ import type { StoredCallLog } from './copilot/types.js'
 
 const app = new Hono()
 const port = Number(process.env.PORT ?? 3000)
+const hostname = process.env.HOST ?? '0.0.0.0'
 const widgetDistRoot = fileURLToPath(new URL('../../web-component/dist/', import.meta.url))
 const copilotStore = new CopilotStore(appConfig.copilotDbPath)
 const copilotAnalyzer = new CopilotAnalyzer(appConfig, ghl, copilotStore)
@@ -449,10 +450,10 @@ reviewQueue.start()
 
 serve({
   fetch: app.fetch,
-  hostname: '127.0.0.1',
+  hostname,
   port,
 }, (info) => {
-  console.log(`Server is running on http://localhost:${info.port}`)
+  console.log(`Server is running on http://${hostname}:${info.port}`)
 })
 
 function toPublicSession(session: ISessionData) {
