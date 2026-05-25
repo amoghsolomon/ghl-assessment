@@ -9,7 +9,10 @@
   "dependencies": {
     "@gohighlevel/api-client": "^3.0.0",
     "@hono/node-server": "^1.19.14",
-    "hono": "^4.12.23"
+    "@openrouter/ai-sdk-provider": "^2.2.3",
+    "ai": "^6.0.86",
+    "hono": "^4.12.23",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^24.12.4",

@@ -19,3 +19,6 @@ The component accepts these attributes:
 - `api-base-url`: Hono API origin. Empty string uses the current origin.
 - `app-id`: HighLevel Marketplace app id, required for `window.exposeSessionDetails(appId)` in Custom JS injection.
 - `agent-id`: optional Voice AI agent id.
+
+The full HighLevel Custom JS tab-injection snippet lives at
+[`../docs/highlevel-custom-js-injection.md`](../docs/highlevel-custom-js-injection.md).

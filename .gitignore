@@ -18,6 +18,7 @@ api/data/
 logs/
 *.log
 pnpm-debug.log*
+.playwright-mcp/
 
 # editor/system
 .DS_Store

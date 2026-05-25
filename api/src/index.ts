@@ -18,10 +18,23 @@ import {
   verifyAppSessionToken,
   type HighLevelUserContext,
 } from './auth/user-context.js'
+import { CopilotAnalyzer } from './copilot/analyzer.js'
+import { ReviewQueue } from './copilot/queue.js'
+import { CopilotStore } from './copilot/store.js'
+import {
+  getWebhookEventId,
+  isVoiceAiCallEnd,
+  parseWebhookPayload,
+  verifyWebhookSignature,
+} from './copilot/webhooks.js'
+import type { StoredCallLog } from './copilot/types.js'
 
 const app = new Hono()
 const port = Number(process.env.PORT ?? 3000)
 const widgetDistRoot = fileURLToPath(new URL('../../web-component/dist/', import.meta.url))
+const copilotStore = new CopilotStore(appConfig.copilotDbPath)
+const copilotAnalyzer = new CopilotAnalyzer(appConfig, ghl, copilotStore)
+const reviewQueue = new ReviewQueue(copilotStore, copilotAnalyzer)
 
 app.get('/', (c) => {
   return c.redirect('/embed')
@@ -191,6 +204,30 @@ app.post('/api/auth/ghl-context', async (c) => {
   }
 })
 
+app.post('/webhooks/ghl', async (c) => {
+  const rawBody = await c.req.text()
+
+  try {
+    if (!verifyWebhookSignature(rawBody, c.req.raw.headers, appConfig)) {
+      return c.json({ error: 'Invalid webhook signature' }, 401)
+    }
+
+    const payload = parseWebhookPayload(rawBody)
+
+    if (!isVoiceAiCallEnd(payload)) {
+      return c.json({ ok: true, ignored: true })
+    }
+
+    const eventId = getWebhookEventId(payload)
+    copilotStore.recordWebhookEvent(eventId, payload.type ?? payload.eventType ?? 'VoiceAiCallEnd', payload.locationId, payload.id, payload)
+    enqueueReviewForCall(payload.locationId, payload)
+
+    return c.json({ ok: true, queued: true })
+  } catch (error) {
+    return c.json({ error: getErrorMessage(error) }, 400)
+  }
+})
+
 app.get('/api/voice-ai/call-logs', async (c) => {
   const appSession = getRequestAppSession(c.req.header('authorization'))
 
@@ -215,12 +252,22 @@ app.get('/api/voice-ai/call-logs', async (c) => {
       pageSize,
     })
 
+    const callLogs = response.callLogs.map(toPublicCallLog)
+    const reviews = ingestCallLogs(appSession.value.locationId, callLogs)
+
     return c.json({
       locationId: appSession.value.locationId,
       total: response.total,
       page: response.page,
       pageSize: response.pageSize,
-      callLogs: response.callLogs.map(toPublicCallLog),
+      copilotSummary: copilotStore.summarizeReviews(
+        callLogs.map((callLog) => reviews.get(callLog.id)),
+        callLogs
+      ),
+      callLogs: callLogs.map((callLog) => ({
+        ...callLog,
+        review: reviews.get(callLog.id),
+      })),
     })
   } catch (error) {
     return c.json({ error: getErrorMessage(error) }, 500)
@@ -240,9 +287,44 @@ app.get('/api/voice-ai/call-logs/:callId', async (c) => {
       callId: c.req.param('callId'),
     })
 
+    const callLog = toPublicCallLog(response)
+    enqueueReviewForCall(appSession.value.locationId, callLog)
+
     return c.json({
       locationId: appSession.value.locationId,
-      callLog: toPublicCallLog(response),
+      callLog: {
+        ...callLog,
+        review: copilotStore.getReview(appSession.value.locationId, callLog.id),
+      },
+    })
+  } catch (error) {
+    return c.json({ error: getErrorMessage(error) }, 500)
+  }
+})
+
+app.post('/api/voice-ai/call-logs/:callId/review/retry', async (c) => {
+  const appSession = getRequestAppSession(c.req.header('authorization'))
+
+  if (!appSession.ok) {
+    return c.json({ error: appSession.error }, 401)
+  }
+
+  try {
+    const response = await ghl.voiceAi.getCallLog({
+      locationId: appSession.value.locationId,
+      callId: c.req.param('callId'),
+    })
+    const callLog = toPublicCallLog(response)
+
+    copilotStore.retryReview(appSession.value.locationId, callLog)
+    reviewQueue.kick()
+
+    return c.json({
+      locationId: appSession.value.locationId,
+      callLog: {
+        ...callLog,
+        review: copilotStore.getReview(appSession.value.locationId, callLog.id),
+      },
     })
   } catch (error) {
     return c.json({ error: getErrorMessage(error) }, 500)
@@ -362,6 +444,8 @@ app.get('/embed', (c) => {
 })
 
 await ghlSessionStorage.init()
+copilotStore.init()
+reviewQueue.start()
 
 serve({
   fetch: app.fetch,
@@ -397,6 +481,34 @@ function toPublicUserContext(context: HighLevelUserContext, locationId: string) 
   }
 }
 
+function ingestCallLogs(locationId: string, callLogs: StoredCallLog[]) {
+  let queuedReview = false
+
+  for (const callLog of callLogs) {
+    queuedReview = enqueueReviewForCall(locationId, callLog) || queuedReview
+  }
+
+  if (queuedReview) {
+    reviewQueue.kick()
+  }
+
+  return copilotStore.getReviews(
+    locationId,
+    callLogs.map((callLog) => callLog.id)
+  )
+}
+
+function enqueueReviewForCall(locationId: string, callLog: StoredCallLog) {
+  copilotStore.upsertCallLog(locationId, callLog)
+  const queuedReview = copilotStore.ensureReviewQueued(locationId, callLog)
+
+  if (queuedReview) {
+    reviewQueue.kick()
+  }
+
+  return queuedReview
+}
+
 function toPublicCallLog(callLog: {
   id: string
   contactId?: string
@@ -406,14 +518,14 @@ function toPublicCallLog(callLog: {
   createdAt: string
   duration: number
   trialCall?: boolean
-  executedCallActions?: unknown[]
+  executedCallActions?: StoredCallLog['executedCallActions']
   summary?: string
   transcript?: string
-  transcriptWithToolCalls?: unknown[]
+  transcriptWithToolCalls?: StoredCallLog['transcriptWithToolCalls']
   translation?: unknown
   extractedData?: unknown
   messageId?: string
-}) {
+}): StoredCallLog {
   return {
     id: callLog.id,
     contactId: callLog.contactId,

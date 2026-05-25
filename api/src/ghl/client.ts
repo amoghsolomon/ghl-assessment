@@ -2,9 +2,6 @@ import { HighLevel, LogLevel, UserType, type ISessionData } from '@gohighlevel/a
 import { getAppConfig, requireOAuthConfig } from '../config.js'
 import { SQLiteSessionStorage } from './sqlite-session-storage.js'
 
-const GHL_INSTALL_URL =
-  'https://marketplace.gohighlevel.com/v2/oauth/chooselocation?response_type=code&client_id=6a132795cd94029bfaecbe34-mpl5nj8m&scope=voice-ai-dashboard.readonly+voice-ai-agents.readonly+voice-ai-agents.write+voice-ai-agent-goals.readonly+voice-ai-agent-goals.write&version_id=6a132795cd94029bfaecbe34'
-
 export const appConfig = getAppConfig()
 const config = appConfig
 requireOAuthConfig(config)
@@ -23,9 +20,15 @@ export function getRedirectUri(origin: string) {
 }
 
 export function getAuthorizationUrl(origin: string) {
-  const authorizationUrl = new URL(GHL_INSTALL_URL)
-
+  const authorizationUrl = new URL('https://marketplace.gohighlevel.com/v2/oauth/chooselocation')
+  authorizationUrl.searchParams.set('response_type', 'code')
+  authorizationUrl.searchParams.set('client_id', config.ghlClientId)
+  authorizationUrl.searchParams.set('scope', config.ghlOauthScopes)
   authorizationUrl.searchParams.set('redirect_uri', getRedirectUri(origin))
+
+  if (config.ghlVersionId) {
+    authorizationUrl.searchParams.set('version_id', config.ghlVersionId)
+  }
 
   return authorizationUrl.toString()
 }
