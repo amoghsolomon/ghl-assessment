@@ -1,0 +1,17 @@
+.git
+.github
+.playwright-mcp
+node_modules
+api/node_modules
+web-component/node_modules
+dist
+api/dist
+web-component/dist
+data
+api/data
+.env
+.env.*
+*.log
+README.md
+docs
+SPEC.md

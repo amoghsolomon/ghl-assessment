@@ -1,0 +1,51 @@
+name: Publish Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-ghl-observability-copilot
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and push container image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out app
+        uses: actions/checkout@v4
+
+      - name: Resolve image name
+        shell: bash
+        run: |
+          image_repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "IMAGE_REPOSITORY=${image_repository}" >> "${GITHUB_ENV}"
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> "${GITHUB_ENV}"
+
+      - name: Log in to GHCR
+        shell: bash
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build image
+        shell: bash
+        run: |
+          docker build \
+            --pull \
+            --tag "${IMAGE_REPOSITORY}:${IMAGE_TAG}" \
+            --tag "${IMAGE_REPOSITORY}:main" \
+            .
+
+      - name: Push image
+        shell: bash
+        run: |
+          docker push "${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${IMAGE_REPOSITORY}:main"

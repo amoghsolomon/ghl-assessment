@@ -85,7 +85,7 @@ The API uses Node 24's built-in env-file loading. Put these in either the repo r
 ```sh
 GHL_CLIENT_ID=your-client-id
 GHL_CLIENT_SECRET=your-client-secret
-GHL_OAUTH_SCOPES=voice-ai-dashboard.readonly voice-ai-agents.readonly voice-ai-agents.write voice-ai-agent-goals.readonly voice-ai-agent-goals.write
+GHL_OAUTH_SCOPES=voice-ai-dashboard.readonly voice-ai-agents.readonly voice-ai-agent-goals.readonly
 GHL_VERSION_ID=your-marketplace-app-version-id
 GHL_APP_ID=your-marketplace-app-id
 GHL_APP_SHARED_SECRET=your-marketplace-shared-secret
@@ -134,6 +134,8 @@ http://localhost:3000/oauth/install
 ```
 
 For a public HighLevel sandbox test, expose the API with a tunnel such as ngrok and set `APP_ORIGIN` to that public origin.
+
+Deployment notes for GitHub Actions and Argo CD Image Updater live in [`docs/deployment.md`](docs/deployment.md).
 
 ## HighLevel Webhook
 
