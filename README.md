@@ -135,7 +135,13 @@ http://localhost:3000/oauth/install
 
 For a public HighLevel sandbox test, expose the API with a tunnel such as ngrok and set `APP_ORIGIN` to that public origin.
 
-Deployment notes for GitHub Actions and Argo CD Image Updater live in [`docs/deployment.md`](docs/deployment.md).
+## Documentation
+
+- [HighLevel sandbox setup with local API and ngrok](docs/sandbox-local-ngrok.md)
+- [Architecture and Team of One ownership](docs/architecture-and-team-of-one.md)
+- [Functional vs mocked notes](docs/functional-vs-mocked.md)
+- [HighLevel Custom JS injection snippet](docs/highlevel-custom-js-injection.md)
+- [Deployment with GitHub Actions and Argo CD](docs/deployment.md)
 
 ## HighLevel Webhook
 
@@ -156,7 +162,10 @@ The intended Custom JS integration adds an Observability tab under the existing 
 The minimal mount shape is:
 
 ```html
-<script type="module" src="https://your-public-api-origin/widget/observability-copilot.js"></script>
+<script
+  type="module"
+  src="https://your-public-api-origin/widget/observability-copilot.js"
+></script>
 <observability-copilot
   api-base-url="https://your-public-api-origin"
   app-id="your-marketplace-app-id"
@@ -180,7 +189,3 @@ The component reads HighLevel session context from `window.exposeSessionDetails(
 - `POST /api/voice-ai/call-logs/:callId/review/retry`: retries failed analysis for a call.
 - `GET /widget/observability-copilot.js`: serves the compiled web component.
 - `GET /embed`: local test page.
-
-## Public Repo Notes
-
-The repository intentionally ignores local secrets, SQLite databases, build output, dependencies, and Playwright MCP snapshots. Before publishing, verify that `.env`, `data/`, `api/data/`, `dist/`, and `.playwright-mcp/` are not committed.
